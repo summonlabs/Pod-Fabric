@@ -1,0 +1,9 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+include("${CMAKE_CURRENT_LIST_DIR}/PodFabricTargets.cmake")
+
+check_required_components(PodFabric)
+
+set(PodFabric_VERSION "@PROJECT_VERSION@")

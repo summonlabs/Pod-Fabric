@@ -1,0 +1,3 @@
+add_executable(benchmark_compose compose_benchmark.cpp)
+target_link_libraries(benchmark_compose PRIVATE PodFabric::podfabric)
+podfabric_configure_target(benchmark_compose)
