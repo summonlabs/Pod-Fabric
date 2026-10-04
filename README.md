@@ -11,7 +11,7 @@ It answers one question, continuously and deterministically:
 > pod-level state is authoritative *now*, which rack-to-rack connectivity may be
 > used, and what must be fenced or degraded when a member changes?
 
-Pod Fabric composes the outputs of a Rack Network Fabric. It does not own
+Pod Fabric composes the outputs of a [Rack Network Fabric](https://github.com/summonlabs/Rack-Network-Fabric). It does not own
 rack-internal truth.
 
 ---
