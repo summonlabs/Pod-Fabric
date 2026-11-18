@@ -267,12 +267,27 @@ Status remove_file(const std::filesystem::path& path) {
 Status atomic_replace(const std::filesystem::path& source,
                       const std::filesystem::path& destination) {
 #if defined(_WIN32)
-  if (!::MoveFileExW(source.wstring().c_str(), destination.wstring().c_str(),
-                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-    return Status(Code::Unavailable,
-                  "atomic replace failed with error " + std::to_string(::GetLastError()));
+  // While a reader has the destination open (an inspection of the store, an
+  // antivirus or indexing scan) the replace fails until the reader closes the
+  // file, so it is retried for a bounded time (about 2 s). A directory in the
+  // way is not transient and fails at once.
+  for (int attempt = 0;; ++attempt) {
+    if (::MoveFileExW(source.wstring().c_str(), destination.wstring().c_str(),
+                      MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+      return Status::success();
+    }
+    const DWORD error = ::GetLastError();
+    const DWORD attributes = ::GetFileAttributesW(destination.wstring().c_str());
+    const bool directory =
+        attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    const bool transient = (error == ERROR_ACCESS_DENIED || error == ERROR_SHARING_VIOLATION ||
+                            error == ERROR_LOCK_VIOLATION) &&
+                           !directory;
+    if (!transient || attempt >= 100) {
+      return Status(Code::Unavailable, "atomic replace failed with error " + std::to_string(error));
+    }
+    ::Sleep(20);
   }
-  return Status::success();
 #else
   std::error_code ec;
   std::filesystem::rename(source, destination, ec);

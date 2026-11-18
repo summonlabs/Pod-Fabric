@@ -257,3 +257,13 @@ PF_TEST(transport, a_shutdown_request_stops_the_server) {
   PF_CHECK(harness.server.stop().ok());
   PF_CHECK(harness.controller.close().ok());
 }
+
+PF_TEST(transport, a_second_listener_cannot_take_a_listening_port) {
+  auto first = transport::Socket::listen("127.0.0.1", 0, 4);
+  PF_REQUIRE(first.ok());
+  const std::uint16_t port = first.value().bound_port();
+  PF_CHECK(port != 0);
+  auto second = transport::Socket::listen("127.0.0.1", port, 4);
+  // Two pods must never share one listening port: the second bind fails.
+  PF_CHECK(!second.ok());
+}

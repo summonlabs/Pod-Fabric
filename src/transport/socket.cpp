@@ -177,8 +177,15 @@ Result<Socket> Socket::listen(const std::string& host, std::uint16_t port, int b
     }
     Socket socket(handle);
     const int one = 1;
+#if defined(_WIN32)
+    // SO_REUSEADDR on Windows lets a second socket bind a port that is still
+    // listening; exclusive use makes that second bind fail instead.
+    (void)::setsockopt(handle, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
+                       reinterpret_cast<const char*>(&one), sizeof(one));
+#else
     (void)::setsockopt(handle, SOL_SOCKET, SO_REUSEADDR,
                        reinterpret_cast<const char*>(&one), sizeof(one));
+#endif
     if (::bind(handle, candidate->ai_addr, static_cast<int>(candidate->ai_addrlen)) != 0) {
       failure = Status(Code::Unavailable,
                        "cannot bind listen address: " + describe_socket_error(last_error()));

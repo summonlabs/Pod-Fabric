@@ -2,10 +2,12 @@
 // Copyright 2026 Summon Software Labs.
 // SPDX-License-Identifier: Apache-2.0
 
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "podfabric/persist/store.hpp"
@@ -356,5 +358,33 @@ PF_TEST(persist, erase_all_returns_the_store_to_a_fresh_state) {
   PF_REQUIRE(reopened.open().ok());
   PF_CHECK_EQ(reopened.recovery().outcome, RecoveryOutcome::Fresh);
   PF_CHECK(reopened.close().ok());
+  test::remove_directory(directory);
+}
+
+PF_TEST(persist, compaction_waits_for_a_reader_of_the_checkpoint) {
+  const std::string directory = test::make_scratch_directory("store-checkpoint-reader");
+  StoreOptions options;
+  options.directory = directory;
+  PodStore store(options);
+  PF_REQUIRE(store.open().ok());
+  PF_REQUIRE(store.commit(make_state("pod-reader", 1, 1)).ok());
+  PF_REQUIRE(store.compact().ok());
+  PF_REQUIRE(store.commit(make_state("pod-reader", 2, 2)).ok());
+  bool reader_opened = false;
+  bool compacted = false;
+  {
+    // An inspection of the store holds the checkpoint open while the next
+    // compaction replaces it, and closes it shortly after.
+    std::ifstream reader(checkpoint_file(directory), std::ios::binary);
+    reader_opened = reader.is_open();
+    std::thread compactor([&store, &compacted] { compacted = store.compact().ok(); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    reader.close();
+    compactor.join();
+  }
+  PF_CHECK(reader_opened);
+  // The replacement waits for the reader instead of failing the compaction.
+  PF_CHECK(compacted);
+  PF_CHECK(store.close().ok());
   test::remove_directory(directory);
 }
